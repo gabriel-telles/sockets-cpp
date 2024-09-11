@@ -1,6 +1,3 @@
-/* This page contains a client program that can request a file from the server program.
-The server responds by sending the whole file.
-*/
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
@@ -10,51 +7,76 @@ The server responds by sending the whole file.
 #include <netinet/in.h>
 #include <netdb.h>
 
-#define SERVER_PORT 8080 /* arbitrary, but client & server must agree */
-#define BUFSIZE 4096     /* block transfer size */
+#define SERVER_PORT 8080
+#define BUFFER_SIZE 4096
 
 int main(int argc, char **argv) {
-  int c, s, bytes;
-  char buf[BUFSIZE];          /* buffer for incoming file */
-  struct hostent *h;          /* info about server */
-  struct sockaddr_in channel; /* holds IP address */
+    int connection_fd;
+    int socket_fd;
+    ssize_t bytes_received;
+    char buffer[BUFFER_SIZE];
+    struct hostent *server_host;
+    struct sockaddr_in server_address;
 
-  if (argc != 3) {
-    printf("Usage: client server-name file-name");
-    exit(-1);
-  }
+    validateArguments(argc);
 
-  h = gethostbyname(argv[1]); /* look up host’s IP address */
-  if (!h) {
-    printf("gethostbyname failed to locate %s", argv[1]);
-    exit(-1);
-  }
+    server_host = gethostbyname(argv[1]);
+    validateHostName(server_host);
 
-  s = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (s < 0) {
-    printf("socket call failed");
-    exit(-1);
-  }
+    socket_fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    handleSocketError(socket_fd);
 
-  memset(&channel, 0, sizeof(channel));
-  channel.sin_family = AF_INET;
-  memcpy(&channel.sin_addr.s_addr, h->h_addr, h->h_length);
-  channel.sin_port = htons(SERVER_PORT);
+    initializeSocketAddress(server_address, server_host);
 
-  c = connect(s, (struct sockaddr *)&channel, sizeof(channel));
-  if (c < 0) {
-    printf("connect failed");
-    exit(-1);
-  }
+    connection_fd = connect(socket_fd, (struct sockaddr *)&server_address, sizeof(server_address));
+    handleConnectionError(connection_fd);
 
-  /* Connection is now established. Send file name including 0 byte at end. */
-  write(s, argv[2], strlen(argv[2]) + 1);
+    write(socket_fd, argv[2], strlen(argv[2]) + 1);
 
-  /* Go get the file and write it to standard output.*/
-  while (1) {
-    bytes = read(s, buf, BUFSIZE); /* read from socket */
-    if (bytes <= 0)
-      exit(0);            /* check for end of file */
-    write(1, buf, bytes); /* write to standard output */
-  }
+    while ((bytes_received = read(socket_fd, buffer, BUFFER_SIZE)) > 0) {
+        write(STDOUT_FILENO, buffer, bytes_received);
+    }
+
+    if (bytes_received < 0) {
+        displayErrorAndExit("Failed to read data from socket");
+    }
+
+    close(socket_fd);
+    return 0;
+}
+
+void initializeSocketAddress(struct sockaddr_in &address, struct hostent *host) {
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    memcpy(&address.sin_addr.s_addr, host->h_addr, host->h_length);
+    address.sin_port = htons(SERVER_PORT);
+}
+
+void validateHostName(struct hostent *host) {
+    if (!host) {
+        displayErrorAndExit("Failed to resolve host name");
+    }
+}
+
+void handleConnectionError(int connection_status) {
+    if (connection_status < 0) {
+        displayErrorAndExit("Failed to connect to server");
+    }
+}
+
+void handleSocketError(int socket_fd) {
+    if (socket_fd < 0) {
+        displayErrorAndExit("Socket creation failed");
+    }
+}
+
+void validateArguments(int argc) {
+    if (argc != 3) {
+        displayErrorAndExit("Usage: client server-name file-name");
+    }
+}
+
+void displayErrorAndExit(const char *message) {
+    perror(message);
+    exit(EXIT_FAILURE);
 }

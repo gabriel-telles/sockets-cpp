@@ -1,4 +1,3 @@
-/* This is the server code */
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
@@ -9,65 +8,89 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#define SERVER_PORT 8080  /* arbitrary, but client & server must agree*/
-#define BUF_SIZE 4096  /* block transfer size */
-#define QUEUE_SIZE 10
+#define SERVER_PORT 8080
+#define BUFFER_SIZE 4096
+#define BACKLOG 10
 
-int main(int argc, char *argv[]) { 
-   int s, b, l, fd, sa, bytes, on = 1;
-   char buf[BUF_SIZE];  /* buffer for outgoing file */
-   struct sockaddr_in channel;  /* holds IP address */
+int main() {
+    int server_socket;
+    struct sockaddr_in server_address;
 
-   /* Build address structure to bind to socket. */
-   memset(&channel, 0, sizeof(channel));
+    setupServerSocket(server_address, server_socket);
 
-   /* zero channel */
-   channel.sin_family = AF_INET;
-   channel.sin_addr.s_addr = htonl(INADDR_ANY);
-   channel.sin_port = htons(SERVER_PORT);
+    while (1) {
+        int client_socket = accept(server_socket, nullptr, nullptr);
+        if (client_socket < 0) {
+            handleSocketError(client_socket, "Failed to accept connection");
+        }
+        processClientConnection(client_socket);
+    }
 
-   /* Passive open. Wait for connection. */
-   s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); /* create socket */
-   if (s < 0) {
-      printf("socket call failed");
-      exit(-1);
-   }
-   setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on));
-   
-   b = bind(s, (struct sockaddr *) &channel, sizeof(channel));
-   if (b < 0) {
-      printf("bind failed");
-      exit(-1);
-   }
-   
-   l = listen(s, QUEUE_SIZE); /* specify queue size */
-   if (l < 0) {
-      printf("listen failed");
-      exit(-1);
-   }
-
-   /* Socket is now set up and bound. Wait for connection and process it. */
-   while (1) {
-      sa = accept(s, 0, 0); /* block for connection request */
-      if (sa < 0) {
-         printf("accept failed");
-         exit(-1);
-      }
-
-      read(sa, buf, BUF_SIZE); /* read file name from socket */
-
-      /* Get and return the file. */
-      fd = open(buf, O_RDONLY); /* open the file to be sent back */
-      if (fd < 0)
-         printf("open failed");
-      while (1) {
-         bytes = read(fd, buf, BUF_SIZE); /* read from file */
-         if (bytes <= 0) /* check for end of file */
-            break;  
-         write(sa, buf, bytes);  /* write bytes to socket */
-      }
-      close(fd); /* close file */
-      close(sa); /* close connection */
-   }   
+    close(server_socket);
+    return 0;
 }
 
+void setupServerSocket(struct sockaddr_in &address, int &server_socket) {
+    int option = 1;
+
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    address.sin_port = htons(SERVER_PORT);
+
+    server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    handleSocketError(server_socket, "Failed to create socket");
+
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0) {
+        handleSocketError(server_socket, "Failed to set socket options");
+    }
+
+    if (bind(server_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        handleSocketError(server_socket, "Failed to bind socket");
+    }
+
+    if (listen(server_socket, BACKLOG) < 0) {
+        handleSocketError(server_socket, "Failed to listen on socket");
+    }
+}
+
+void handleSocketError(int socket_fd, const char *message) {
+    perror(message);
+    close(socket_fd);
+    exit(EXIT_FAILURE);
+}
+
+void processClientConnection(int client_socket) {
+    char buffer[BUFFER_SIZE];
+    int file_descriptor;
+    ssize_t bytes_read;
+
+    ssize_t file_name_length = read(client_socket, buffer, BUFFER_SIZE);
+    if (file_name_length <= 0) {
+        close(client_socket);
+        return;
+    }
+
+    file_descriptor = open(buffer, O_RDONLY);
+    if (file_descriptor < 0) {
+        perror("Failed to open file");
+        close(client_socket);
+        return;
+    }
+
+    while ((bytes_read = read(file_descriptor, buffer, BUFFER_SIZE)) > 0) {
+        if (write(client_socket, buffer, bytes_read) < 0) {
+            perror("Failed to write to socket");
+            close(file_descriptor);
+            close(client_socket);
+            return;
+        }
+    }
+
+    if (bytes_read < 0) {
+        perror("Failed to read from file");
+    }
+
+    close(file_descriptor);
+    close(client_socket);
+}
