@@ -9,19 +9,21 @@ using namespace std;
 std::map<int, ClientInfo> client_data_mutex;
 pthread_mutex_t client_data_lock = PTHREAD_MUTEX_INITIALIZER;
 
-
 int main() {
     int server_socket;
     struct sockaddr_in server_address;
 
     setupServerSocket(server_address, server_socket);
+    cout << "Server listening on port " << SERVER_PORT << endl;
 
-    while (1) {
+    while (true) {
         int *client_socket = new int;
         *client_socket = accept(server_socket, nullptr, nullptr);
         if (*client_socket < 0) {
             handleSocketError("Failed to accept connection");
         }
+
+        cout << "Accepted new connection" << endl;
 
         pthread_t thread;
         pthread_create(&thread, nullptr, processClientConnection, client_socket);
@@ -67,15 +69,19 @@ void* processClientConnection(void* client_socket_ptr) {
     int client_socket = *(int*)client_socket_ptr;
     delete (int*)client_socket_ptr;
     
+    cout << "Processing client request" << endl;
+
     char buffer[BUFFER_SIZE];
     ssize_t bytes_read;
     
     while ((bytes_read = read(client_socket, buffer, BUFFER_SIZE)) > 0) {
         buffer[bytes_read] = '\0';  // Null-terminate the message
 
+        cout << "Received message: " << buffer << endl;
+
         MessageType message_type = parseMessageType(buffer);
         if (message_type == MYGET) {
-            handleMyGet(client_socket, buffer + 4);  // Assuming 'MyGet ' prefix
+            handleMyGet(client_socket, buffer + 6);  // Adjusted for 'MyGet ' prefix
         } else if (message_type == MYLASTACCESS) {
             handleMyLastAccess(client_socket);
         } else {
@@ -86,6 +92,11 @@ void* processClientConnection(void* client_socket_ptr) {
         updateLastAccess(client_socket);
     }
 
+    if (bytes_read < 0) {
+        perror("Failed to read from socket");
+    }
+
+    cout << "Closing connection" << endl;
     close(client_socket);
     return nullptr;
 }
@@ -106,6 +117,8 @@ void handleMyGet(int client_socket, const char *file_path) {
         write(client_socket, error_message, strlen(error_message));
         return;
     }
+
+    cout << "Sending file: " << file_path << endl;
 
     char buffer[BUFFER_SIZE];
     ssize_t bytes_read;
