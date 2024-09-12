@@ -8,6 +8,8 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+#include "server.h"
+
 #define SERVER_PORT 8080
 #define BUFFER_SIZE 4096
 #define BACKLOG 10
