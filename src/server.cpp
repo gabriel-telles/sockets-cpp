@@ -23,7 +23,7 @@ int main() {
     while (1) {
         int client_socket = accept(server_socket, nullptr, nullptr);
         if (client_socket < 0) {
-            handleSocketError(client_socket, "Failed to accept connection");
+            handleSocketError("Failed to accept connection");
         }
         processClientConnection(client_socket);
     }
@@ -41,24 +41,25 @@ void setupServerSocket(struct sockaddr_in &address, int &server_socket) {
     address.sin_port = htons(SERVER_PORT);
 
     server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    handleSocketError(server_socket, "Failed to create socket");
+    if (server_socket < 0) {
+        handleSocketError("Failed to create socket");
+    }
 
     if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0) {
-        handleSocketError(server_socket, "Failed to set socket options");
+        handleSocketError("Failed to set socket options");
     }
 
     if (bind(server_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        handleSocketError(server_socket, "Failed to bind socket");
+        handleSocketError("Failed to bind socket");
     }
 
     if (listen(server_socket, BACKLOG) < 0) {
-        handleSocketError(server_socket, "Failed to listen on socket");
+        handleSocketError("Failed to listen on socket");
     }
 }
 
-void handleSocketError(int socket_fd, const char *message) {
+void handleSocketError(const char *message) {
     perror(message);
-    close(socket_fd);
     exit(EXIT_FAILURE);
 }
 
