@@ -8,28 +8,29 @@
 #include <map>
 #include <string>
 
-#define SERVER_PORT 8080
-#define BUFFER_SIZE 4096
-#define BACKLOG 10
+constexpr int SERVER_PORT = 8080;
+constexpr int BUFFER_SIZE = 4096;
+constexpr int BACKLOG = 10;
 
-enum MessageType {
-    MYGET,
-    MYLASTACCESS
+enum class MessageType {
+    Get,
+    LastAccess,
+    Unknown
 };
 
 struct ClientInfo {
     time_t last_access_time;
 };
 
-void handleSocketError(const char *message);
-void setupServerSocket(struct sockaddr_in &address, int &server_socket);
+void handleSocketError(const std::string& message);
+void setupServerSocket(struct sockaddr_in& address, int& server_socket);
 void* processClientConnection(void* client_socket_ptr);
-MessageType parseMessageType(const char *message);
-void handleMyGet(int client_socket, const char *file_path);
-void handleMyLastAccess(int client_socket);
+MessageType parseMessageType(const std::string& message);
+void handleGetRequest(int client_socket, const std::string& file_path);
+void handleLastAccess(int client_socket);
 void updateLastAccess(int client_socket);
 
-extern std::map<int, ClientInfo> client_data_mutex;
+extern std::map<int, ClientInfo> client_data;
 extern pthread_mutex_t client_data_lock;
 
 #endif // SERVER_H
