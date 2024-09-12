@@ -47,22 +47,15 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-void initializeSocketAddress(struct sockaddr_in &address, struct hostent *host) {
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    memcpy(&address.sin_addr.s_addr, host->h_addr, host->h_length);
-    address.sin_port = htons(SERVER_PORT);
+void validateArguments(int argc) {
+    if (argc != 3) {
+        displayErrorAndExit("Usage: client server-name file-name");
+    }
 }
 
 void validateHostName(struct hostent *host) {
     if (!host) {
         displayErrorAndExit("Failed to resolve host name");
-    }
-}
-
-void handleConnectionError(int connection_status) {
-    if (connection_status < 0) {
-        displayErrorAndExit("Failed to connect to server");
     }
 }
 
@@ -72,9 +65,16 @@ void handleSocketError(int socket_fd) {
     }
 }
 
-void validateArguments(int argc) {
-    if (argc != 3) {
-        displayErrorAndExit("Usage: client server-name file-name");
+void initializeSocketAddress(struct sockaddr_in &address, struct hostent *host) {
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    memcpy(&address.sin_addr.s_addr, host->h_addr, host->h_length);
+    address.sin_port = htons(SERVER_PORT);
+}
+
+void handleConnectionError(int connection_status) {
+    if (connection_status < 0) {
+        displayErrorAndExit("Failed to connect to server");
     }
 }
 
